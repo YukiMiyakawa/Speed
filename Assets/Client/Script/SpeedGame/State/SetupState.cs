@@ -14,12 +14,13 @@ namespace SpeedGame.State
             _context = context;
         }
 
-        public UniTask EnterAsync()
+        public async UniTask EnterAsync()
         {
             _context.Model.Setup();
             _context.StuckTimer = 0f;
             _controller.ResetRound();
-            return _controller.ChangeStateAsync(_controller.PlayerInputState);
+            await _controller.StartAgentLoopsAsync();
+            await _controller.ChangeStateAsync(_controller.PlayerInputState);
         }
 
         public UniTask ExitAsync() => UniTask.CompletedTask;

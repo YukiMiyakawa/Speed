@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using R3;
 using SpeedGame.Animation;
@@ -34,6 +35,7 @@ namespace SpeedGame.Core
         private SpeedGameContext _context;
         private SpeedStateMachine _stateMachine;
         private readonly Queue<PlayerCommand> _queuedCommands = new();
+        private CancellationTokenSource _agentLoopCts;
 
         // ローカル入力ソース（オフラインの自分操作）
         private LocalPlayerCommandSource _localPlayerSource;
@@ -72,7 +74,7 @@ namespace SpeedGame.Core
             SetupState = new SetupState(this, _context);
             PlayerInputState = new PlayerInputState(this, _context);
             ResolveCommandState = new ResolveCommandState(this, _context);
-            GameOverState = new GameOverState();
+            GameOverState = new GameOverState(this);
 
             await ChangeStateAsync(SetupState);
 
@@ -93,6 +95,43 @@ namespace SpeedGame.Core
             _queuedCommands.Clear();
             PlayerAgent?.ResetInput();
             OpponentAgent?.ResetInput();
+        }
+
+        public async UniTask StartAgentLoopsAsync()
+        {
+            await StopAgentLoopsAsync();
+
+            if (PlayerAgent == null || OpponentAgent == null)
+            {
+                return;
+            }
+
+            _agentLoopCts = CancellationTokenSource.CreateLinkedTokenSource(destroyCancellationToken);
+            await PlayerAgent.EnterAsync();
+            await OpponentAgent.EnterAsync();
+
+            RunAgentLoop(PlayerAgent, _agentLoopCts.Token).Forget();
+            RunAgentLoop(OpponentAgent, _agentLoopCts.Token).Forget();
+        }
+
+        public async UniTask StopAgentLoopsAsync()
+        {
+            if (_agentLoopCts != null)
+            {
+                _agentLoopCts.Cancel();
+                _agentLoopCts.Dispose();
+                _agentLoopCts = null;
+            }
+
+            if (PlayerAgent != null)
+            {
+                await PlayerAgent.ExitAsync();
+            }
+
+            if (OpponentAgent != null)
+            {
+                await OpponentAgent.ExitAsync();
+            }
         }
 
         public void RequestPlayFromPlayer(int handIndex, PileLane lane)
@@ -177,6 +216,21 @@ namespace SpeedGame.Core
             // 各プレイヤーで独立FSMを保持し、入力取得だけを差し替え可能にしている。
             PlayerAgent = new PlayerAgent(PlayerSide.Player, _context.Model, _localPlayerSource, EnqueueCommand);
             OpponentAgent = new PlayerAgent(PlayerSide.Opponent, _context.Model, _opponentSource, EnqueueCommand);
+        }
+
+        private async UniTaskVoid RunAgentLoop(PlayerAgent agent, CancellationToken ct)
+        {
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    await agent.TickAsync(Time.deltaTime);
+                    await UniTask.Yield(PlayerLoopTiming.Update, ct);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 }

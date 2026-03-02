@@ -18,21 +18,16 @@ namespace SpeedGame.State
 
         public async UniTask EnterAsync()
         {
-            await _controller.PlayerAgent.EnterAsync();
-            await _controller.OpponentAgent.EnterAsync();
+            await UniTask.CompletedTask;
         }
 
         public async UniTask ExitAsync()
         {
-            await _controller.PlayerAgent.ExitAsync();
-            await _controller.OpponentAgent.ExitAsync();
+            await UniTask.CompletedTask;
         }
 
         public async UniTask TickAsync()
         {
-            await _controller.PlayerAgent.TickAsync(Time.deltaTime);
-            await _controller.OpponentAgent.TickAsync(Time.deltaTime);
-
             if (_controller.HasQueuedCommand)
             {
                 await _controller.ChangeStateAsync(_controller.ResolveCommandState);
