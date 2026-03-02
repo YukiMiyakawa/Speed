@@ -23,6 +23,7 @@ namespace SpeedGame.State
                 return;
             }
 
+            // オンライン移行時はここをローカル確定から「サーバー確定結果の適用」に置換する。
             if (_context.Model.TryApplyCommand(command, out _))
             {
                 if (_context.Model.IsWin(command.Side))

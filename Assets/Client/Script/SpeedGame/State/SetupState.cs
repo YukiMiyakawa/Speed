@@ -18,6 +18,7 @@ namespace SpeedGame.State
         {
             _context.Model.Setup();
             _context.StuckTimer = 0f;
+            _controller.ResetRound();
             return _controller.ChangeStateAsync(_controller.PlayerInputState);
         }
 

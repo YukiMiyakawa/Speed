@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 using R3;
 using SpeedGame.Animation;
 using SpeedGame.Config;
+using SpeedGame.Core.Player;
 using SpeedGame.Domain;
 using SpeedGame.State;
 using UnityEngine;
@@ -12,6 +13,13 @@ namespace SpeedGame.Core
 {
     public sealed class SpeedGameController : MonoBehaviour
     {
+        // 相手入力の供給元を切り替える。Photon移行時は RemoteQueue を常用し、CPUを外す。
+        private enum OpponentControlMode
+        {
+            Cpu,
+            RemoteQueue
+        }
+
         [Header("Rule / Timing")]
         [SerializeField] private SpeedRuleSettings ruleSettings = new();
         [SerializeField] private SpeedTimingSettings timingSettings = new();
@@ -20,9 +28,22 @@ namespace SpeedGame.Core
         [Header("Animation")]
         [SerializeField] private SpeedAnimationProfile animationProfile;
 
+        [Header("Input Abstraction")]
+        [SerializeField] private OpponentControlMode opponentControlMode = OpponentControlMode.Cpu;
+
         private SpeedGameContext _context;
         private SpeedStateMachine _stateMachine;
         private readonly Queue<PlayerCommand> _queuedCommands = new();
+
+        // ローカル入力ソース（オフラインの自分操作）
+        private LocalPlayerCommandSource _localPlayerSource;
+        // 相手入力ソース（CPUまたはネットワーク）
+        private IPlayerCommandSource _opponentSource;
+        // ネットワーク入力用の実体。Photon受信をここに流し込む。
+        private RemoteQueueCommandSource _remoteOpponentSource;
+
+        public PlayerAgent PlayerAgent { get; private set; }
+        public PlayerAgent OpponentAgent { get; private set; }
 
         public SetupState SetupState { get; private set; }
         public PlayerInputState PlayerInputState { get; private set; }
@@ -46,6 +67,8 @@ namespace SpeedGame.Core
             _context = new SpeedGameContext(ruleSettings, timingSettings, cpuDifficulty, animation, destroyCancellationToken);
             _stateMachine = new SpeedStateMachine();
 
+            BuildPlayerAgents();
+
             SetupState = new SetupState(this, _context);
             PlayerInputState = new PlayerInputState(this, _context);
             ResolveCommandState = new ResolveCommandState(this, _context);
@@ -65,24 +88,27 @@ namespace SpeedGame.Core
             return _stateMachine.ChangeStateAsync(next);
         }
 
+        public void ResetRound()
+        {
+            _queuedCommands.Clear();
+            PlayerAgent?.ResetInput();
+            OpponentAgent?.ResetInput();
+        }
+
         public void RequestPlayFromPlayer(int handIndex, PileLane lane)
         {
-            if (_context == null)
-            {
-                return;
-            }
-
-            _context.CommandStream.OnNext(PlayerCommand.Play(PlayerSide.Player, handIndex, lane));
+            _localPlayerSource?.Enqueue(PlayerCommand.Play(PlayerSide.Player, handIndex, lane));
         }
 
         public void RequestDrawFromPlayerStock()
         {
-            if (_context == null)
-            {
-                return;
-            }
+            _localPlayerSource?.Enqueue(PlayerCommand.Draw(PlayerSide.Player));
+        }
 
-            _context.CommandStream.OnNext(PlayerCommand.Draw(PlayerSide.Player));
+        public void ReceiveRemoteCommand(PlayerCommand command)
+        {
+            // Photonなどの受信イベントから呼ぶ接続点。
+            _remoteOpponentSource?.PushFromNetwork(command);
         }
 
         public void EnqueueCommand(PlayerCommand command)
@@ -100,23 +126,6 @@ namespace SpeedGame.Core
 
             command = default;
             return false;
-        }
-
-        public bool TryQueuePlayableOpponentCommand(int handIndex, PileLane lane)
-        {
-            if (_context == null)
-            {
-                return false;
-            }
-
-            var cmd = PlayerCommand.Play(PlayerSide.Opponent, handIndex, lane);
-            if (!_context.Model.CanApplyCommand(cmd))
-            {
-                return false;
-            }
-
-            _queuedCommands.Enqueue(cmd);
-            return true;
         }
 
         public UniTask AnimateMoveToLaneAsync(RectTransform card, RectTransform lane)
@@ -152,6 +161,22 @@ namespace SpeedGame.Core
             return $"PHand:{_context.Model.PlayerHand.Count} OHand:{_context.Model.OpponentHand.Count} " +
                    $"PStock:{_context.Model.PlayerStockCount} OStock:{_context.Model.OpponentStockCount} " +
                    $"L:{left} R:{right}";
+        }
+
+        private void BuildPlayerAgents()
+        {
+            _localPlayerSource = new LocalPlayerCommandSource();
+
+            // 相手入力源の差し替え点。オンラインでは RemoteQueue/Photon 実装に置換する。
+            _opponentSource = opponentControlMode switch
+            {
+                OpponentControlMode.RemoteQueue => _remoteOpponentSource = new RemoteQueueCommandSource(),
+                _ => new CpuPlayerCommandSource(cpuDifficulty)
+            };
+
+            // 各プレイヤーで独立FSMを保持し、入力取得だけを差し替え可能にしている。
+            PlayerAgent = new PlayerAgent(PlayerSide.Player, _context.Model, _localPlayerSource, EnqueueCommand);
+            OpponentAgent = new PlayerAgent(PlayerSide.Opponent, _context.Model, _opponentSource, EnqueueCommand);
         }
     }
 }

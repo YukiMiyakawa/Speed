@@ -3,7 +3,6 @@ using R3;
 using SpeedGame.Animation;
 using SpeedGame.Config;
 using SpeedGame.Domain;
-using UnityEngine;
 
 namespace SpeedGame.Core
 {
@@ -13,7 +12,6 @@ namespace SpeedGame.Core
         public readonly SpeedTimingSettings Timing;
         public readonly CpuDifficultyProfile CpuDifficulty;
         public readonly ICardAnimationService Animation;
-        public readonly Subject<PlayerCommand> CommandStream;
         public readonly ReactiveProperty<PlayerSide?> Winner;
         public readonly CancellationToken DestroyToken;
 
@@ -31,7 +29,6 @@ namespace SpeedGame.Core
             CpuDifficulty = cpuDifficulty;
             Animation = animation;
             DestroyToken = destroyToken;
-            CommandStream = new Subject<PlayerCommand>();
             Winner = new ReactiveProperty<PlayerSide?>(null);
         }
     }
