@@ -1,15 +1,15 @@
-using Cysharp.Threading.Tasks;
+﻿using Cysharp.Threading.Tasks;
 
 namespace SpeedGame.Core.Player
 {
     /// <summary>
-    /// 行動直後に1 tick 待機し、連続入力を抑制してから待機ステートへ戻すステート。
+    /// 行動直後に1 tick 待機し、連続入力を抑制してから入力受付へ戻すステート。
     /// </summary>
     public sealed class PlayerCooldownState : IPlayerAgentState
     {
         /// <summary>遷移を委譲する親エージェント。</summary>
         private readonly PlayerAgent _agent;
-        /// <summary>次 tick で待機へ戻るためのフラグ。</summary>
+        /// <summary>次 tick で入力受付へ戻るためのフラグ。</summary>
         private bool _leaveNextTick;
 
         /// <summary>クールダウンステートを構築する。</summary>
@@ -28,7 +28,7 @@ namespace SpeedGame.Core.Player
         /// <summary>ステート退場時に後処理は行わない。</summary>
         public UniTask ExitAsync() => UniTask.CompletedTask;
 
-        /// <summary>1 tick 経過後に待機ステートへ戻る。</summary>
+        /// <summary>1 tick 経過後に入力受付ステートへ戻る。</summary>
         public UniTask TickAsync(float deltaTime)
         {
             if (!_leaveNextTick)
@@ -37,7 +37,7 @@ namespace SpeedGame.Core.Player
                 return UniTask.CompletedTask;
             }
 
-            return _agent.ChangeToWaitingAsync();
+            return _agent.ChangeToInputAsync();
         }
     }
 }

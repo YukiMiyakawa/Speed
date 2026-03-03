@@ -20,7 +20,7 @@ namespace SpeedGame.State
             _context.StuckTimer = 0f;
             _controller.ResetRound();
             await _controller.StartAgentLoopsAsync();
-            await _controller.ChangeStateAsync(_controller.PlayerInputState);
+            await _controller.ChangeStateAsync(_controller.ProcessingState);
         }
 
         public UniTask ExitAsync() => UniTask.CompletedTask;

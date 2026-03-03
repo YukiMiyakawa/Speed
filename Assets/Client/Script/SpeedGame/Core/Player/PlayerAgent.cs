@@ -18,10 +18,15 @@ namespace SpeedGame.Core.Player
         /// <summary>プレイヤー専用の内部ステートマシン。</summary>
         private readonly PlayerAgentStateMachine _stateMachine = new();
 
-        /// <summary>入力待ちステート。</summary>
-        private readonly PlayerWaitingState _waitingState;
+        /// <summary>入力受付ステート。</summary>
+        private readonly PlayerInputState _inputState;
+        /// <summary>コマンド送出準備ステート。</summary>
+        private readonly PrepareCommandState _prepareState;
         /// <summary>行動直後のクールダウンステート。</summary>
         private readonly PlayerCooldownState _cooldownState;
+
+        private bool _hasPendingCommand;
+        private PlayerCommand _pendingCommand;
 
         /// <summary>このエージェントが担当するサイド。</summary>
         public PlayerSide Side { get; }
@@ -33,14 +38,15 @@ namespace SpeedGame.Core.Player
             _model = model;
             _source = source;
             _submit = submit;
-            _waitingState = new PlayerWaitingState(this);
+            _inputState = new PlayerInputState(this);
+            _prepareState = new PrepareCommandState(this);
             _cooldownState = new PlayerCooldownState(this);
         }
 
-        /// <summary>内部ステートを入力待ちに遷移して開始する。</summary>
+        /// <summary>内部ステートを入力受付に遷移して開始する。</summary>
         public UniTask EnterAsync()
         {
-            return _stateMachine.ChangeStateAsync(_waitingState);
+            return _stateMachine.ChangeStateAsync(_inputState);
         }
 
         /// <summary>内部ステートを停止する。</summary>
@@ -49,10 +55,12 @@ namespace SpeedGame.Core.Player
             return _stateMachine.ChangeStateAsync(null);
         }
 
-        /// <summary>入力ソースのバッファを初期化する。</summary>
+        /// <summary>入力ソースと未送出コマンドを初期化する。</summary>
         public void ResetInput()
         {
             _source.Reset();
+            _hasPendingCommand = false;
+            _pendingCommand = default;
         }
 
         /// <summary>プレイヤー内部FSMを1フレーム進める。</summary>
@@ -67,16 +75,44 @@ namespace SpeedGame.Core.Player
             return _source.TryGetNextCommand(_model, Side, deltaTime, out command);
         }
 
+        /// <summary>コマンドを送出待ちとして保持する。</summary>
+        internal void SetPendingCommand(PlayerCommand command)
+        {
+            _pendingCommand = command;
+            _hasPendingCommand = true;
+        }
+
+        /// <summary>保持中の送出待ちコマンドを取り出す。</summary>
+        internal bool TryTakePendingCommand(out PlayerCommand command)
+        {
+            if (_hasPendingCommand)
+            {
+                command = _pendingCommand;
+                _pendingCommand = default;
+                _hasPendingCommand = false;
+                return true;
+            }
+
+            command = default;
+            return false;
+        }
+
         /// <summary>上位の確定処理キューへコマンドを渡す。</summary>
         internal void Submit(PlayerCommand command)
         {
             _submit(command);
         }
 
-        /// <summary>入力待ちステートへ遷移する。</summary>
-        internal UniTask ChangeToWaitingAsync()
+        /// <summary>入力受付ステートへ遷移する。</summary>
+        internal UniTask ChangeToInputAsync()
         {
-            return _stateMachine.ChangeStateAsync(_waitingState);
+            return _stateMachine.ChangeStateAsync(_inputState);
+        }
+
+        /// <summary>コマンド送出準備ステートへ遷移する。</summary>
+        internal UniTask ChangeToPrepareAsync()
+        {
+            return _stateMachine.ChangeStateAsync(_prepareState);
         }
 
         /// <summary>クールダウンステートへ遷移する。</summary>

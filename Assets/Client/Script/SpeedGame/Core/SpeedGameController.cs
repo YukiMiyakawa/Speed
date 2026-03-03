@@ -14,7 +14,6 @@ namespace SpeedGame.Core
 {
     public sealed class SpeedGameController : MonoBehaviour
     {
-        // 相手入力の供給元を切り替える。Photon移行時は RemoteQueue を常用し、CPUを外す。
         private enum OpponentControlMode
         {
             Cpu,
@@ -37,23 +36,21 @@ namespace SpeedGame.Core
         private readonly Queue<PlayerCommand> _queuedCommands = new();
         private CancellationTokenSource _agentLoopCts;
 
-        // ローカル入力ソース（オフラインの自分操作）
         private LocalPlayerCommandSource _localPlayerSource;
-        // 相手入力ソース（CPUまたはネットワーク）
         private IPlayerCommandSource _opponentSource;
-        // ネットワーク入力用の実体。Photon受信をここに流し込む。
         private RemoteQueueCommandSource _remoteOpponentSource;
 
         public PlayerAgent PlayerAgent { get; private set; }
         public PlayerAgent OpponentAgent { get; private set; }
 
+        public CommandResolver Resolver { get; private set; }
+
         public SetupState SetupState { get; private set; }
-        public PlayerInputState PlayerInputState { get; private set; }
-        public ResolveCommandState ResolveCommandState { get; private set; }
+        public ProcessingState ProcessingState { get; private set; }
+        public PauseState PauseState { get; private set; }
         public GameOverState GameOverState { get; private set; }
 
         public ReadOnlyReactiveProperty<PlayerSide?> Winner => _context.Winner;
-        public bool HasQueuedCommand => _queuedCommands.Count > 0;
 
         private async UniTaskVoid Start()
         {
@@ -68,12 +65,13 @@ namespace SpeedGame.Core
 
             _context = new SpeedGameContext(ruleSettings, timingSettings, cpuDifficulty, animation, destroyCancellationToken);
             _stateMachine = new SpeedStateMachine();
+            Resolver = new CommandResolver(_context);
 
             BuildPlayerAgents();
 
             SetupState = new SetupState(this, _context);
-            PlayerInputState = new PlayerInputState(this, _context);
-            ResolveCommandState = new ResolveCommandState(this, _context);
+            ProcessingState = new ProcessingState(this, _context);
+            PauseState = new PauseState();
             GameOverState = new GameOverState(this);
 
             await ChangeStateAsync(SetupState);
@@ -146,7 +144,6 @@ namespace SpeedGame.Core
 
         public void ReceiveRemoteCommand(PlayerCommand command)
         {
-            // Photonなどの受信イベントから呼ぶ接続点。
             _remoteOpponentSource?.PushFromNetwork(command);
         }
 
@@ -206,14 +203,12 @@ namespace SpeedGame.Core
         {
             _localPlayerSource = new LocalPlayerCommandSource();
 
-            // 相手入力源の差し替え点。オンラインでは RemoteQueue/Photon 実装に置換する。
             _opponentSource = opponentControlMode switch
             {
                 OpponentControlMode.RemoteQueue => _remoteOpponentSource = new RemoteQueueCommandSource(),
                 _ => new CpuPlayerCommandSource(cpuDifficulty)
             };
 
-            // 各プレイヤーで独立FSMを保持し、入力取得だけを差し替え可能にしている。
             PlayerAgent = new PlayerAgent(PlayerSide.Player, _context.Model, _localPlayerSource, EnqueueCommand);
             OpponentAgent = new PlayerAgent(PlayerSide.Opponent, _context.Model, _opponentSource, EnqueueCommand);
         }

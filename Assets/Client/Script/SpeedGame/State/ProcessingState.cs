@@ -5,33 +5,33 @@ using UnityEngine;
 
 namespace SpeedGame.State
 {
-    public sealed class PlayerInputState : ISpeedGameState
+    /// <summary>
+    /// ゲーム実行中ステート。キュー処理と場詰み監視を担当する。
+    /// </summary>
+    public sealed class ProcessingState : ISpeedGameState
     {
         private readonly SpeedGameController _controller;
         private readonly SpeedGameContext _context;
 
-        public PlayerInputState(SpeedGameController controller, SpeedGameContext context)
+        public ProcessingState(SpeedGameController controller, SpeedGameContext context)
         {
             _controller = controller;
             _context = context;
         }
 
-        public async UniTask EnterAsync()
-        {
-            await UniTask.CompletedTask;
-        }
-
-        public async UniTask ExitAsync()
-        {
-            await UniTask.CompletedTask;
-        }
+        public UniTask EnterAsync() => UniTask.CompletedTask;
+        public UniTask ExitAsync() => UniTask.CompletedTask;
 
         public async UniTask TickAsync()
         {
-            if (_controller.HasQueuedCommand)
+            if (_controller.TryDequeueCommand(out var command))
             {
-                await _controller.ChangeStateAsync(_controller.ResolveCommandState);
-                return;
+                if (_controller.Resolver.TryResolve(command, out var winner) && winner.HasValue)
+                {
+                    _context.Winner.Value = winner.Value;
+                    await _controller.ChangeStateAsync(_controller.GameOverState);
+                    return;
+                }
             }
 
             var playerCanMove = _context.Model.CanAnyMove(PlayerSide.Player);
