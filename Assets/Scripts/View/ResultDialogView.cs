@@ -15,11 +15,14 @@ namespace Speed.View
         public event Action OnRematch;
         public event Action OnTitle;
 
-        private void Awake()
+        private bool _initialized;
+
+        private void EnsureInit()
         {
+            if (_initialized) return;
+            _initialized = true;
             _rematchButton.onClick.AddListener(() => OnRematch?.Invoke());
             _titleButton.onClick.AddListener(()   => OnTitle?.Invoke());
-            gameObject.SetActive(false);
         }
 
         public void Show(BattleResult result)
@@ -31,6 +34,7 @@ namespace Speed.View
                 case BattleResultType.CpuWin:    msg = "CPU WINS";   break;
                 default:                         msg = "DRAW";       break;
             }
+            EnsureInit();
             _resultText.text = msg;
             gameObject.SetActive(true);
         }

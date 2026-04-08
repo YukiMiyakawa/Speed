@@ -71,6 +71,8 @@ namespace Speed.Controllers
         // ---- Drag lifecycle ----
         private void TryBeginDrag(Vector3 worldPos)
         {
+            if (GameController.IsPlayerFouled) return;
+
             var hit = Physics2D.OverlapPoint(worldPos);
             if (hit == null) return;
 
@@ -79,6 +81,13 @@ namespace Speed.Controllers
 
             int idx = BattleView.GetPlayerHandIndex(cv);
             if (idx < 0) return;
+
+            // お手付き: touching own hand cards during stalemate flip
+            if (GameController.Phase == BattlePhase.StalemateFlipping)
+            {
+                GameController.TriggerPlayerFoul();
+                return;
+            }
 
             _draggedCard      = cv;
             _draggedHandIndex = idx;
@@ -90,6 +99,7 @@ namespace Speed.Controllers
 
         private void UpdateDrag(Vector3 worldPos)
         {
+            if (GameController.IsPlayerFouled) { CancelDrag(); return; }
             _draggedCard.SetPosition(worldPos);
             GameController.NotifyPlayerDragging();
         }

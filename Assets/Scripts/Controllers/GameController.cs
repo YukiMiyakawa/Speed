@@ -35,9 +35,18 @@ namespace Speed.Controllers
         public event Action                         OnFlipStart;
         public event Action                         OnFlipComplete;
         public event Action<BattleResult>           OnGameOver;
+        public event Action<PlayerId>               OnFoulStarted;
+        public event Action<PlayerId>               OnFoulExpired;
+
+        // --- State ---
+        public bool IsPlayerFouled => _playerFoulTimer > 0f;
+
+        [Header("Foul")]
+        public float FoulDuration = 3f;
 
         // --- Internal ---
         private float _stalemateTimer;
+        private float _playerFoulTimer;
         private BattleInputController _inputController;
         private CpuController         _cpuController;
 
@@ -55,9 +64,10 @@ namespace Speed.Controllers
 
         public void StartBattle()
         {
-            State          = new GameState();
-            Phase          = BattlePhase.Dealing;
+            State           = new GameState();
+            Phase           = BattlePhase.Dealing;
             _stalemateTimer = 0f;
+            _playerFoulTimer = 0f;
             LeftPileAnimating  = false;
             RightPileAnimating = false;
             DealService.Deal(State);
@@ -163,6 +173,16 @@ namespace Speed.Controllers
         // ---------------------------------------------------------------
         private void Update()
         {
+            if (_playerFoulTimer > 0f)
+            {
+                _playerFoulTimer -= Time.deltaTime;
+                if (_playerFoulTimer <= 0f)
+                {
+                    _playerFoulTimer = 0f;
+                    OnFoulExpired?.Invoke(PlayerId.Player);
+                }
+            }
+
             if (Phase != BattlePhase.Playing) return;
             if (LeftPileAnimating || RightPileAnimating) return;
 
@@ -181,6 +201,12 @@ namespace Speed.Controllers
             }
         }
 
+        public void TriggerPlayerFoul()
+        {
+            _playerFoulTimer = FoulDuration;
+            OnFoulStarted?.Invoke(PlayerId.Player);
+        }
+
         private void TriggerStalemate()
         {
             bool hasDecks = State.PlayerDeck.Count > 0 || State.CpuDeck.Count > 0;
@@ -191,7 +217,7 @@ namespace Speed.Controllers
             }
 
             Phase = BattlePhase.StalemateFlipping;
-            _inputController?.SetActive(false);
+            // Keep player input active so foul detection works; CPU is stopped.
             _cpuController?.StopThinking();
             OnFlipStart?.Invoke();
         }

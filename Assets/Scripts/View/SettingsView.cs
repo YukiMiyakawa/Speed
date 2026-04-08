@@ -13,26 +13,27 @@ namespace Speed.View
         [SerializeField] private Toggle          _vibrateToggle;
         [SerializeField] private Button          _closeButton;
 
-        private void Awake()
+        private bool _initialized;
+
+        private void EnsureInit()
         {
+            if (_initialized) return;
+            _initialized = true;
             _difficultySlider.minValue     = 1;
             _difficultySlider.maxValue     = 5;
             _difficultySlider.wholeNumbers = true;
-
             _difficultySlider.onValueChanged.AddListener(v =>
                 _difficultyLabel.text = $"Level {(int)v}");
-
             _closeButton.onClick.AddListener(() =>
             {
                 SaveSettings();
                 gameObject.SetActive(false);
             });
-
-            gameObject.SetActive(false);
         }
 
         public void Show()
         {
+            EnsureInit();
             _difficultySlider.value = SettingsManager.CpuDifficulty;
             _soundToggle.isOn       = SettingsManager.SoundOn;
             _vibrateToggle.isOn     = SettingsManager.VibrateOn;

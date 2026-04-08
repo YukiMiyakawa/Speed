@@ -37,11 +37,27 @@ namespace Speed.View
 
         private Transform _cardRoot;
 
+        // ---- Foul indicator ----
+        private GameObject   _foulIndicator;
+        private TextMeshPro  _foulText;
+        private Coroutine    _foulCoroutine;
+
         // ---- Awake: subscribe early so we catch OnDealComplete from GameController.Start ----
         private void Awake()
         {
             var go = new GameObject("CardRoot");
             _cardRoot = go.transform;
+
+            // Foul indicator (world-space 3D text)
+            _foulIndicator = new GameObject("PlayerFoulIndicator");
+            _foulIndicator.transform.position = new Vector3(0f, -2.8f, 0f);
+            _foulText = _foulIndicator.AddComponent<TextMeshPro>();
+            _foulText.fontSize        = 5f;
+            _foulText.fontStyle       = FontStyles.Bold;
+            _foulText.alignment       = TextAlignmentOptions.Center;
+            _foulText.color           = Color.red;
+            _foulText.sortingOrder    = 60;
+            _foulIndicator.SetActive(false);
 
             GameController.OnDealComplete      += OnDealComplete;
             GameController.OnCardPlayed        += OnCardPlayed;
@@ -50,6 +66,8 @@ namespace Speed.View
             GameController.OnFlipStart         += OnFlipStart;
             GameController.OnFlipComplete      += OnFlipComplete;
             GameController.OnGameOver          += OnGameOver;
+            GameController.OnFoulStarted       += OnFoulStarted;
+            GameController.OnFoulExpired       += OnFoulExpired;
         }
 
         private void Start()
@@ -70,6 +88,8 @@ namespace Speed.View
             GameController.OnFlipStart        -= OnFlipStart;
             GameController.OnFlipComplete     -= OnFlipComplete;
             GameController.OnGameOver         -= OnGameOver;
+            GameController.OnFoulStarted      -= OnFoulStarted;
+            GameController.OnFoulExpired      -= OnFoulExpired;
         }
 
         // ===================================================================
@@ -217,6 +237,37 @@ namespace Speed.View
         }
 
         private void OnFlipComplete() { /* Phase already updated in GameController */ }
+
+        // ===================================================================
+        //  Foul
+        // ===================================================================
+        private void OnFoulStarted(PlayerId player)
+        {
+            if (player != PlayerId.Player) return;
+            if (_foulCoroutine != null) StopCoroutine(_foulCoroutine);
+            _foulCoroutine = StartCoroutine(FoulCountdown(GameController.FoulDuration));
+        }
+
+        private void OnFoulExpired(PlayerId player)
+        {
+            if (player != PlayerId.Player) return;
+            if (_foulCoroutine != null) { StopCoroutine(_foulCoroutine); _foulCoroutine = null; }
+            _foulIndicator.SetActive(false);
+        }
+
+        private IEnumerator FoulCountdown(float duration)
+        {
+            _foulIndicator.SetActive(true);
+            float remaining = duration;
+            while (remaining > 0f)
+            {
+                _foulText.text = $"お手付き!\n{remaining:F1}s";
+                yield return null;
+                remaining -= Time.deltaTime;
+            }
+            _foulIndicator.SetActive(false);
+            _foulCoroutine = null;
+        }
 
         // ===================================================================
         //  Game Over
