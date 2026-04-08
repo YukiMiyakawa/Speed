@@ -1,21 +1,36 @@
+using System;
+
 namespace Speed.Domain
 {
-    public sealed class Card
+    public enum Suit { Spade, Heart, Diamond, Club }
+
+    [Serializable]
+    public class Card
     {
-        public Card(int id, Suit suit, Rank rank)
+        public Suit Suit { get; }
+        public int Rank { get; } // 1=A, 2-10, 11=J, 12=Q, 13=K
+
+        public Card(Suit suit, int rank)
         {
-            Id = id;
             Suit = suit;
             Rank = rank;
         }
 
-        public int Id { get; }
-        public Suit Suit { get; }
-        public Rank Rank { get; }
-
-        public override string ToString()
+        public string RankName
         {
-            return $"{Suit}-{Rank}";
+            get
+            {
+                switch (Rank)
+                {
+                    case 1: return "A";
+                    case 11: return "J";
+                    case 12: return "Q";
+                    case 13: return "K";
+                    default: return Rank.ToString();
+                }
+            }
         }
+
+        public override string ToString() => $"{Suit}_{RankName}";
     }
 }

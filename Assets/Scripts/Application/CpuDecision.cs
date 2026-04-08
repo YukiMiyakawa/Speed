@@ -2,19 +2,24 @@ using Speed.Domain;
 
 namespace Speed.Application
 {
-    public readonly struct CpuDecision
+    public enum CpuDecisionType { PlayCard, LookAheadMiss, FalseMiss }
+
+    public class CpuDecision
     {
-        public CpuDecision(Card card, PileId pileId, bool shouldPlay)
+        public CpuDecisionType Type      { get; }
+        public Card             Card      { get; }
+        public PileId           TargetPile { get; }
+        public int              HandIndex { get; }
+
+        public CpuDecision(CpuDecisionType type, Card card, PileId targetPile, int handIndex)
         {
-            Card = card;
-            PileId = pileId;
-            ShouldPlay = shouldPlay;
+            Type       = type;
+            Card       = card;
+            TargetPile = targetPile;
+            HandIndex  = handIndex;
         }
 
-        public Card Card { get; }
-        public PileId PileId { get; }
-        public bool ShouldPlay { get; }
-
-        public static CpuDecision Pass => new CpuDecision(null, PileId.Left, false);
+        public static CpuDecision Miss() =>
+            new CpuDecision(CpuDecisionType.LookAheadMiss, null, PileId.Left, -1);
     }
 }

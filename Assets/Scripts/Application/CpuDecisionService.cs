@@ -4,43 +4,55 @@ using Speed.Domain;
 
 namespace Speed.Application
 {
-    public sealed class CpuDecisionService
+    public static class CpuDecisionService
     {
-        private readonly RuleService ruleService;
+        private static readonly Random Rng = new Random();
 
-        public CpuDecisionService(RuleService ruleService)
+        public static CpuDecision Decide(GameState state, CpuDifficultySettings settings)
         {
-            this.ruleService = ruleService;
+            float roll = (float)Rng.NextDouble();
+            if (roll < settings.MissRate)
+            {
+                if ((float)Rng.NextDouble() < settings.LookAheadMissRatio)
+                    return CpuDecision.Miss();
+
+                var falseMove = GetFalseMove(state);
+                return falseMove ?? CpuDecision.Miss();
+            }
+
+            var validMoves = GetValidMoves(state);
+            if (validMoves.Count == 0) return CpuDecision.Miss();
+
+            var chosen = validMoves[Rng.Next(validMoves.Count)];
+            return new CpuDecision(CpuDecisionType.PlayCard, chosen.card, chosen.pile, chosen.index);
         }
 
-        public CpuDecision Decide(PlayerState cpu, GameState gameState, CpuDifficultySettings settings, Random random)
+        private static List<(Card card, PileId pile, int index)> GetValidMoves(GameState state)
         {
-            var options = new List<CpuDecision>();
-
-            foreach (var card in cpu.Hand.Cards)
+            var moves = new List<(Card, PileId, int)>();
+            for (int i = 0; i < state.CpuHand.Count; i++)
             {
-                if (ruleService.CanPlace(card, gameState.LeftPile))
-                {
-                    options.Add(new CpuDecision(card, PileId.Left, true));
-                }
-
-                if (ruleService.CanPlace(card, gameState.RightPile))
-                {
-                    options.Add(new CpuDecision(card, PileId.Right, true));
-                }
+                var c = state.CpuHand[i];
+                if (RuleService.CanPlace(c, state.LeftPileTop))  moves.Add((c, PileId.Left,  i));
+                if (RuleService.CanPlace(c, state.RightPileTop)) moves.Add((c, PileId.Right, i));
             }
+            return moves;
+        }
 
-            if (options.Count == 0)
+        private static CpuDecision GetFalseMove(GameState state)
+        {
+            var invalid = new List<(Card card, PileId pile, int index)>();
+            for (int i = 0; i < state.CpuHand.Count; i++)
             {
-                return CpuDecision.Pass;
+                var c = state.CpuHand[i];
+                if (!RuleService.CanPlace(c, state.LeftPileTop))
+                    invalid.Add((c, PileId.Left, i));
+                else if (!RuleService.CanPlace(c, state.RightPileTop))
+                    invalid.Add((c, PileId.Right, i));
             }
-
-            if (random.NextDouble() < settings.MistakeRate)
-            {
-                return CpuDecision.Pass;
-            }
-
-            return options[random.Next(options.Count)];
+            if (invalid.Count == 0) return null;
+            var chosen = invalid[Rng.Next(invalid.Count)];
+            return new CpuDecision(CpuDecisionType.FalseMiss, chosen.card, chosen.pile, chosen.index);
         }
     }
 }

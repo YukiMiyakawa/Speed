@@ -1,33 +1,17 @@
+using System.Collections.Generic;
+
 namespace Speed.Domain
 {
-    public sealed class GameState
+    public class GameState
     {
-        public GameState(PlayerState player, PlayerState cpu, TablePile leftPile, TablePile rightPile)
-        {
-            Player = player;
-            Cpu = cpu;
-            LeftPile = leftPile;
-            RightPile = rightPile;
-            Result = BattleResult.None;
-        }
+        public List<Card> PlayerHand { get; } = new List<Card>();
+        public List<Card> CpuHand    { get; } = new List<Card>();
+        public List<Card> PlayerDeck { get; } = new List<Card>(); // [0] = top
+        public List<Card> CpuDeck    { get; } = new List<Card>(); // [0] = top
+        public List<Card> LeftPile   { get; } = new List<Card>(); // [0] = top
+        public List<Card> RightPile  { get; } = new List<Card>(); // [0] = top
 
-        public PlayerState Player { get; }
-        public PlayerState Cpu { get; }
-        public TablePile LeftPile { get; }
-        public TablePile RightPile { get; }
-        public bool IsWaitingForPileRefresh { get; set; }
-        public bool IsGameOver { get; private set; }
-        public BattleResult Result { get; private set; }
-
-        public TablePile GetPile(PileId pileId)
-        {
-            return pileId == PileId.Left ? LeftPile : RightPile;
-        }
-
-        public void Finish(BattleResult result)
-        {
-            IsGameOver = true;
-            Result = result;
-        }
+        public Card LeftPileTop  => LeftPile.Count  > 0 ? LeftPile[0]  : null;
+        public Card RightPileTop => RightPile.Count > 0 ? RightPile[0] : null;
     }
 }

@@ -2,38 +2,48 @@ using Speed.Domain;
 
 namespace Speed.Application
 {
-    public sealed class BattleCommandProcessor
+    public static class BattleCommandProcessor
     {
-        private readonly RuleService ruleService;
-
-        public BattleCommandProcessor(RuleService ruleService)
+        public static PutCardResult TryPutCard(GameState state, PlayerId player, int handIndex, PileId pileId)
         {
-            this.ruleService = ruleService;
+            var hand = player == PlayerId.Player ? state.PlayerHand : state.CpuHand;
+            if (handIndex < 0 || handIndex >= hand.Count)
+                return PutCardResult.InvalidRule();
+
+            var card    = hand[handIndex];
+            var pileTop = pileId == PileId.Left ? state.LeftPileTop  : state.RightPileTop;
+            var pile    = pileId == PileId.Left ? state.LeftPile     : state.RightPile;
+
+            if (!RuleService.CanPlace(card, pileTop))
+                return PutCardResult.InvalidRule();
+
+            hand.RemoveAt(handIndex);
+            pile.Insert(0, card);
+            return PutCardResult.Success();
         }
 
-        public PutCardResult TryPutCard(PlayerState player, TablePile pile, int cardId, out Card playedCard)
+        /// <summary>
+        /// Flips one card from each player's deck onto the center piles (stalemate relief).
+        /// Returns true if at least one card was flipped.
+        /// </summary>
+        public static bool FlipCenterPiles(GameState state)
         {
-            playedCard = null;
-
-            if (!player.Hand.TryGet(cardId, out var card))
+            bool flipped = false;
+            if (state.PlayerDeck.Count > 0)
             {
-                return PutCardResult.CardNotInHand;
+                var card = state.PlayerDeck[0];
+                state.PlayerDeck.RemoveAt(0);
+                state.LeftPile.Insert(0, card);
+                flipped = true;
             }
-
-            if (pile.IsPlayingPutCardAnimation)
+            if (state.CpuDeck.Count > 0)
             {
-                return PutCardResult.BlockedByAnimation;
+                var card = state.CpuDeck[0];
+                state.CpuDeck.RemoveAt(0);
+                state.RightPile.Insert(0, card);
+                flipped = true;
             }
-
-            if (!ruleService.CanPlace(card, pile))
-            {
-                return PutCardResult.InvalidRule;
-            }
-
-            player.Hand.TryRemove(cardId, out playedCard);
-            pile.SetTopCard(playedCard);
-            pile.IsPlayingPutCardAnimation = true;
-            return PutCardResult.Success;
+            return flipped;
         }
     }
 }

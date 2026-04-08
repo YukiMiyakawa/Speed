@@ -4,70 +4,45 @@ using Speed.Domain;
 
 namespace Speed.Application
 {
-    public sealed class DealService
+    public static class DealService
     {
-        private const int InitialHandCount = 5;
-        private const int CardsPerPlayer = 25;
+        private static readonly Random Rng = new Random();
 
-        public GameState CreateInitialState(int seed)
+        /// <summary>
+        /// Deals a full 52-card shuffled deck into the given GameState.
+        /// Player: 5 hand + 20 deck. CPU: 5 hand + 20 deck. Center: 1 left + 1 right.
+        /// </summary>
+        public static void Deal(GameState state)
         {
-            var random = new Random(seed);
-            var cards = CreateDeck();
-            Shuffle(cards, random);
+            var all = CreateFullDeck();
+            Shuffle(all);
 
-            var playerHand = new Hand();
-            var cpuHand = new Hand();
-            var index = 0;
-
-            for (var i = 0; i < InitialHandCount; i++)
-            {
-                playerHand.Add(cards[index++]);
-                cpuHand.Add(cards[index++]);
-            }
-
-            var leftPile = new TablePile(PileId.Left, cards[index++]);
-            var rightPile = new TablePile(PileId.Right, cards[index++]);
-
-            var playerDeckCards = new List<Card>();
-            var cpuDeckCards = new List<Card>();
-
-            while (playerHand.Count + playerDeckCards.Count < CardsPerPlayer)
-            {
-                playerDeckCards.Add(cards[index++]);
-            }
-
-            while (cpuHand.Count + cpuDeckCards.Count < CardsPerPlayer)
-            {
-                cpuDeckCards.Add(cards[index++]);
-            }
-
-            var player = new PlayerState(PlayerId.Player, false, playerHand, new Deck(playerDeckCards));
-            var cpu = new PlayerState(PlayerId.Cpu, true, cpuHand, new Deck(cpuDeckCards));
-            return new GameState(player, cpu, leftPile, rightPile);
+            int i = 0;
+            for (int j = 0; j < 5; j++)  state.PlayerHand.Add(all[i++]);
+            for (int j = 0; j < 5; j++)  state.CpuHand.Add(all[i++]);
+            state.LeftPile.Add(all[i++]);
+            state.RightPile.Add(all[i++]);
+            for (int j = 0; j < 20; j++) state.PlayerDeck.Add(all[i++]);
+            for (int j = 0; j < 20; j++) state.CpuDeck.Add(all[i++]);
         }
 
-        private static List<Card> CreateDeck()
+        private static List<Card> CreateFullDeck()
         {
-            var cards = new List<Card>(52);
-            var id = 0;
-
+            var deck = new List<Card>(52);
             foreach (Suit suit in Enum.GetValues(typeof(Suit)))
-            {
-                foreach (Rank rank in Enum.GetValues(typeof(Rank)))
-                {
-                    cards.Add(new Card(id++, suit, rank));
-                }
-            }
-
-            return cards;
+                for (int rank = 1; rank <= 13; rank++)
+                    deck.Add(new Card(suit, rank));
+            return deck;
         }
 
-        private static void Shuffle(IList<Card> cards, Random random)
+        private static void Shuffle(List<Card> cards)
         {
-            for (var i = cards.Count - 1; i > 0; i--)
+            for (int i = cards.Count - 1; i > 0; i--)
             {
-                var swapIndex = random.Next(i + 1);
-                (cards[i], cards[swapIndex]) = (cards[swapIndex], cards[i]);
+                int j = Rng.Next(i + 1);
+                var tmp = cards[i];
+                cards[i] = cards[j];
+                cards[j] = tmp;
             }
         }
     }

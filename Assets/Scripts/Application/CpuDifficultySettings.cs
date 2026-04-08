@@ -1,14 +1,19 @@
+using System;
+
 namespace Speed.Application
 {
-    public readonly struct CpuDifficultySettings
+    [Serializable]
+    public class CpuDifficultySettings
     {
-        public CpuDifficultySettings(float reactionSeconds, float mistakeRate)
-        {
-            ReactionSeconds = reactionSeconds;
-            MistakeRate = mistakeRate;
-        }
+        public float ReactionTimeMs;     // ms to wait before deciding
+        public float MissRate;           // 0..1 combined miss probability
+        public float LookAheadMissRatio; // 0..1 fraction of misses that are look-ahead (skip)
 
-        public float ReactionSeconds { get; }
-        public float MistakeRate { get; }
+        public CpuDifficultySettings(float reactionTimeMs, float missRate, float lookAheadMissRatio)
+        {
+            ReactionTimeMs     = reactionTimeMs;
+            MissRate           = missRate;
+            LookAheadMissRatio = lookAheadMissRatio;
+        }
     }
 }

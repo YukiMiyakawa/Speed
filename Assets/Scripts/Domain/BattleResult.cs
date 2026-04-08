@@ -1,10 +1,14 @@
 namespace Speed.Domain
 {
-    public enum BattleResult
+    public enum BattleResultType { PlayerWin, CpuWin, Draw }
+
+    public class BattleResult
     {
-        None,
-        PlayerWin,
-        CpuWin,
-        Draw
+        public BattleResultType Type { get; }
+
+        public BattleResult(BattleResultType type)
+        {
+            Type = type;
+        }
     }
 }

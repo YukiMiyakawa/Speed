@@ -1,20 +1,18 @@
+using System;
 using Speed.Domain;
 
 namespace Speed.Application
 {
-    public sealed class RuleService
+    public static class RuleService
     {
-        public bool CanPlace(Card card, TablePile pile)
+        /// <summary>
+        /// Returns true if card can be placed on topCard (±1, A-K wrap).
+        /// </summary>
+        public static bool CanPlace(Card card, Card topCard)
         {
-            if (card == null || pile == null || pile.TopCard == null)
-            {
-                return false;
-            }
-
-            var cardValue = (int)card.Rank;
-            var topValue = (int)pile.TopCard.Rank;
-            var difference = System.Math.Abs(cardValue - topValue);
-            return difference == 1 || difference == 12;
+            if (card == null || topCard == null) return false;
+            int diff = Math.Abs(card.Rank - topCard.Rank);
+            return diff == 1 || diff == 12; // 12 handles K(13)-A(1) wrap
         }
     }
 }

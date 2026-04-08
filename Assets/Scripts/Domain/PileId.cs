@@ -1,8 +1,4 @@
 namespace Speed.Domain
 {
-    public enum PileId
-    {
-        Left,
-        Right
-    }
+    public enum PileId { Left, Right }
 }

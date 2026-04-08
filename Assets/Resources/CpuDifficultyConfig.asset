@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e35c2bc57b8db245a48deefa86916a9, type: 3}
+  m_Name: CpuDifficultyConfig
+  m_EditorClassIdentifier: 
+  Level1ReactionMs: 650
+  Level1MissRate: 0.18
+  Level2ReactionMs: 500
+  Level2MissRate: 0.12
+  Level3ReactionMs: 380
+  Level3MissRate: 0.07
+  Level4ReactionMs: 260
+  Level4MissRate: 0.03
+  Level5ReactionMs: 180
+  Level5MissRate: 0.01
+  LookAheadMissRatio: 0.5

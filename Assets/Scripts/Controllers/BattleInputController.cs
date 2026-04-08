@@ -1,68 +1,151 @@
-using Speed.Application;
-using Speed.Domain;
-using Speed.Presentation;
 using UnityEngine;
+using Speed.Domain;
+using Speed.View;
 
 namespace Speed.Controllers
 {
-    public sealed class BattleInputController : MonoBehaviour
+    public class BattleInputController : MonoBehaviour
     {
-        private const float MinDragDistance = 90f;
-        private const float MaxDragAngle = 38f;
+        [Header("References")]
+        public BattleView BattleView;
+        public Camera     GameCamera;
 
-        private GameController gameController;
+        [Header("Drag Thresholds")]
+        [Tooltip("Minimum drag distance (world units) to attempt a card play")]
+        public float MinDragDistance = 0.8f;
+        [Tooltip("Maximum angle (degrees) between drag direction and pile direction")]
+        public float MaxAngleDegrees = 55f;
 
-        public void Initialize(GameController controller)
+        private bool     _isActive;
+        private CardView _draggedCard;
+        private int      _draggedHandIndex = -1;
+        private Vector3  _dragStartWorld;
+
+        private GameController GameController => _gc != null ? _gc : (_gc = GetComponent<GameController>());
+        private GameController _gc;
+
+        public void SetActive(bool active)
         {
-            gameController = controller;
+            _isActive = active;
+            if (!active) CancelDrag();
         }
 
-        public void HandleCardReleased(CardView cardView, Vector2 startScreenPosition, Vector2 endScreenPosition)
+        private void Update()
         {
-            if (gameController == null || !gameController.CanAcceptInput())
-            {
-                gameController?.AnimationController.PlayInvalidReturn(cardView);
-                return;
-            }
+            if (!_isActive) return;
 
-            var dragVector = endScreenPosition - startScreenPosition;
-            if (dragVector.magnitude < MinDragDistance)
-            {
-                gameController.AnimationController.PlayInvalidReturn(cardView);
-                return;
-            }
+#if UNITY_EDITOR || UNITY_STANDALONE
+            HandleMouse();
+#else
+            HandleTouch();
+#endif
+        }
 
-            if (!TryResolvePile(startScreenPosition, dragVector, out var pileId))
-            {
-                gameController.AnimationController.PlayInvalidReturn(cardView);
-                return;
-            }
+        // ---- Mouse (Editor / Desktop) ----
+        private void HandleMouse()
+        {
+            if (Input.GetMouseButtonDown(0))
+                TryBeginDrag(ScreenToWorld(Input.mousePosition));
+            else if (Input.GetMouseButton(0) && _draggedCard != null)
+                UpdateDrag(ScreenToWorld(Input.mousePosition));
+            else if (Input.GetMouseButtonUp(0) && _draggedCard != null)
+                EndDrag(ScreenToWorld(Input.mousePosition));
+        }
 
-            var result = gameController.TryPlayerPut(cardView.Card.Id, pileId, cardView);
-            if (result == PutCardResult.BlockedByAnimation)
+        // ---- Touch ----
+        private void HandleTouch()
+        {
+            if (Input.touchCount == 0) return;
+            var t = Input.GetTouch(0);
+            var w = ScreenToWorld(t.position);
+            switch (t.phase)
             {
-                gameController.AnimationController.PlayCancelAnimation(cardView);
+                case TouchPhase.Began:     TryBeginDrag(w);                              break;
+                case TouchPhase.Moved:
+                case TouchPhase.Stationary: if (_draggedCard != null) UpdateDrag(w);    break;
+                case TouchPhase.Ended:
+                case TouchPhase.Canceled:   if (_draggedCard != null) EndDrag(w);       break;
             }
         }
 
-        private bool TryResolvePile(Vector2 startScreenPosition, Vector2 dragVector, out PileId pileId)
+        // ---- Drag lifecycle ----
+        private void TryBeginDrag(Vector3 worldPos)
         {
-            var leftPileView = gameController.GetPileView(PileId.Left);
-            var rightPileView = gameController.GetPileView(PileId.Right);
+            var hit = Physics2D.OverlapPoint(worldPos);
+            if (hit == null) return;
 
-            var leftCenter = RectTransformUtility.WorldToScreenPoint(null, leftPileView.transform.position);
-            var rightCenter = RectTransformUtility.WorldToScreenPoint(null, rightPileView.transform.position);
-            var leftAngle = Vector2.Angle(dragVector, leftCenter - startScreenPosition);
-            var rightAngle = Vector2.Angle(dragVector, rightCenter - startScreenPosition);
+            var cv = hit.GetComponentInParent<CardView>();
+            if (cv == null) return;
 
-            if (leftAngle > MaxDragAngle && rightAngle > MaxDragAngle)
+            int idx = BattleView.GetPlayerHandIndex(cv);
+            if (idx < 0) return;
+
+            _draggedCard      = cv;
+            _draggedHandIndex = idx;
+            _dragStartWorld   = worldPos;
+            _draggedCard.SetDragging(true);
+            _draggedCard.SetSortingOrder(50);
+            GameController.NotifyPlayerDragging();
+        }
+
+        private void UpdateDrag(Vector3 worldPos)
+        {
+            _draggedCard.SetPosition(worldPos);
+            GameController.NotifyPlayerDragging();
+        }
+
+        private void EndDrag(Vector3 worldPos)
+        {
+            _draggedCard.SetDragging(false);
+            _draggedCard.SetSortingOrder(0);
+
+            float dragDist = (worldPos - _dragStartWorld).magnitude;
+            if (dragDist >= MinDragDistance)
             {
-                pileId = PileId.Left;
-                return false;
+                var  dragVec  = (worldPos - _dragStartWorld).normalized;
+                var  leftPos  = BattleView.GetPileWorldPosition(PileId.Left);
+                var  rightPos = BattleView.GetPileWorldPosition(PileId.Right);
+                var  toLeft   = (leftPos  - _dragStartWorld).normalized;
+                var  toRight  = (rightPos - _dragStartWorld).normalized;
+                float leftAngle  = Vector3.Angle(dragVec, toLeft);
+                float rightAngle = Vector3.Angle(dragVec, toRight);
+
+                PileId? target = null;
+                float   best   = MaxAngleDegrees;
+                if (leftAngle  < best) { best = leftAngle;  target = PileId.Left;  }
+                if (rightAngle < best) {                     target = PileId.Right; }
+
+                if (target.HasValue)
+                {
+                    var result = GameController.TryPlayerPutCard(_draggedHandIndex, target.Value);
+                    if (!result.IsSuccess)
+                        BattleView.AnimateCardBounceBack(_draggedCard);
+
+                    _draggedCard      = null;
+                    _draggedHandIndex = -1;
+                    return;
+                }
             }
 
-            pileId = leftAngle <= rightAngle ? PileId.Left : PileId.Right;
-            return true;
+            BattleView.AnimateCardBounceBack(_draggedCard);
+            _draggedCard      = null;
+            _draggedHandIndex = -1;
+        }
+
+        private void CancelDrag()
+        {
+            if (_draggedCard == null) return;
+            _draggedCard.SetDragging(false);
+            BattleView.AnimateCardBounceBack(_draggedCard);
+            _draggedCard      = null;
+            _draggedHandIndex = -1;
+        }
+
+        private Vector3 ScreenToWorld(Vector2 screen)
+        {
+            var cam = GameCamera != null ? GameCamera : Camera.main;
+            var wp  = cam.ScreenToWorldPoint(new Vector3(screen.x, screen.y, cam.nearClipPlane));
+            return new Vector3(wp.x, wp.y, 0f);
         }
     }
 }

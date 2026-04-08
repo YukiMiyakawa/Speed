@@ -1,52 +1,67 @@
-using Speed.Application;
+using System.Collections;
 using UnityEngine;
+using Speed.Domain;
+using Speed.Application;
 
 namespace Speed.Controllers
 {
-    public sealed class CpuController : MonoBehaviour
+    public class CpuController : MonoBehaviour
     {
-        private const float RetryInterval = 0.08f;
+        [Header("References")]
+        public Speed.View.BattleView BattleView;
 
-        private GameController gameController;
-        private CpuDecisionService decisionService;
-        private System.Random random;
-        private float thinkTimer;
+        private bool      _thinking;
+        private Coroutine _loop;
 
-        public void Initialize(GameController controller, CpuDecisionService service, System.Random sharedRandom)
+        private GameController GameController => _gc != null ? _gc : (_gc = GetComponent<GameController>());
+        private GameController _gc;
+
+        public void StartThinking()
         {
-            gameController = controller;
-            decisionService = service;
-            random = sharedRandom;
-            thinkTimer = controller.CpuDifficultySettings.ReactionSeconds;
+            _thinking = true;
+            if (_loop != null) StopCoroutine(_loop);
+            _loop = StartCoroutine(ThinkLoop());
         }
 
-        public void Tick(float deltaTime)
+        public void StopThinking()
         {
-            if (gameController == null || !gameController.CanAcceptInput())
+            _thinking = false;
+            if (_loop != null) { StopCoroutine(_loop); _loop = null; }
+        }
+
+        private IEnumerator ThinkLoop()
+        {
+            while (_thinking)
             {
-                return;
-            }
+                var settings = GameController.GetCpuSettings();
+                yield return new WaitForSeconds(settings.ReactionTimeMs / 1000f);
 
-            thinkTimer -= deltaTime;
-            if (thinkTimer > 0f)
+                if (!_thinking || GameController.Phase != BattlePhase.Playing) continue;
+
+                var decision = CpuDecisionService.Decide(GameController.State, settings);
+                yield return StartCoroutine(ExecuteDecision(decision));
+            }
+        }
+
+        private IEnumerator ExecuteDecision(CpuDecision decision)
+        {
+            switch (decision.Type)
             {
-                return;
+                case CpuDecisionType.LookAheadMiss:
+                    // deliberately do nothing this cycle
+                    break;
+
+                case CpuDecisionType.FalseMiss:
+                    GameController.NotifyCpuFalsePlay(decision.HandIndex, decision.TargetPile);
+                    yield return new WaitForSeconds(0.55f); // wait for false-play animation
+                    break;
+
+                case CpuDecisionType.PlayCard:
+                    var result = GameController.TryCpuPutCard(decision.HandIndex, decision.TargetPile);
+                    if (result.IsSuccess)
+                        yield return new WaitForSeconds(0.25f);
+                    break;
             }
-
-            var decision = decisionService.Decide(
-                gameController.State.Cpu,
-                gameController.State,
-                gameController.CpuDifficultySettings,
-                random);
-
-            if (decision.ShouldPlay)
-            {
-                gameController.TryCpuPut(decision);
-                thinkTimer = gameController.CpuDifficultySettings.ReactionSeconds;
-                return;
-            }
-
-            thinkTimer = RetryInterval;
         }
     }
 }

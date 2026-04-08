@@ -2,36 +2,27 @@ using Speed.Domain;
 
 namespace Speed.Application
 {
-    public sealed class WinJudgeService
+    public static class WinJudgeService
     {
-        public BattleResult EvaluateImmediate(GameState gameState)
+        /// <summary>Returns result if either hand is empty, otherwise null.</summary>
+        public static BattleResult CheckHandEmpty(GameState state)
         {
-            if (gameState.Player.Hand.Count == 0)
-            {
-                return BattleResult.PlayerWin;
-            }
-
-            if (gameState.Cpu.Hand.Count == 0)
-            {
-                return BattleResult.CpuWin;
-            }
-
-            return BattleResult.None;
+            bool pEmpty = state.PlayerHand.Count == 0;
+            bool cEmpty = state.CpuHand.Count == 0;
+            if (pEmpty && cEmpty) return new BattleResult(BattleResultType.Draw);
+            if (pEmpty) return new BattleResult(BattleResultType.PlayerWin);
+            if (cEmpty) return new BattleResult(BattleResultType.CpuWin);
+            return null;
         }
 
-        public BattleResult EvaluateDeckEmptyResolution(GameState gameState)
+        /// <summary>Returns result based on hand counts when stalemate with no decks.</summary>
+        public static BattleResult CheckStalemateResult(GameState state)
         {
-            if (gameState.Player.Hand.Count < gameState.Cpu.Hand.Count)
-            {
-                return BattleResult.PlayerWin;
-            }
-
-            if (gameState.Player.Hand.Count > gameState.Cpu.Hand.Count)
-            {
-                return BattleResult.CpuWin;
-            }
-
-            return BattleResult.Draw;
+            int p = state.PlayerHand.Count;
+            int c = state.CpuHand.Count;
+            if (p < c) return new BattleResult(BattleResultType.PlayerWin);
+            if (c < p) return new BattleResult(BattleResultType.CpuWin);
+            return new BattleResult(BattleResultType.Draw);
         }
     }
 }
